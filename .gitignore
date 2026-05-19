@@ -9,4 +9,4 @@ env/
 __pycache__/
 
 # Логи
-*.log
+*.loggit add .
