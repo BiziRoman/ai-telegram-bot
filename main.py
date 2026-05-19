@@ -1,23 +1,26 @@
-# main.py
 import os
 import logging
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from openai import OpenAI
 from dotenv import load_dotenv
-
 from flask import Flask
 import threading
+import sqlite3
+from datetime import date
 
 # Мини-веб-сервер для предотвращения "засыпания" на бесплатном тарифе
 app = Flask(__name__)
+
 
 @app.route('/')
 def home():
     return "🤖 Бот работает!"
 
+
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
+
 
 # Запускаем веб-сервер в отдельном потоке
 threading.Thread(target=run_flask, daemon=True).start()
@@ -48,6 +51,39 @@ SYSTEM_PROMPT = """Ты — эксперт по копирайтингу для 
 - Для преимуществ используй формулу: "Выгода для покупателя + почему это важно"
 """
 
+# Инициализация БД
+conn = sqlite3.connect("users.db", check_same_thread=False)
+cursor = conn.cursor()
+cursor.execute("""CREATE TABLE IF NOT EXISTS users (
+    user_id INTEGER PRIMARY KEY,
+    requests_count INTEGER DEFAULT 0,
+    last_reset DATE
+)""")
+conn.commit()
+
+
+def get_user_stats(user_id):
+    today = date.today().isoformat()
+    cursor.execute("SELECT requests_count, last_reset FROM users WHERE user_id = ?", (user_id,))
+    row = cursor.fetchone()
+
+    if not row:
+        cursor.execute("INSERT INTO users (user_id, requests_count, last_reset) VALUES (?, 0, ?)", (user_id, today))
+        conn.commit()
+        return 0
+    else:
+        count, last_date = row
+        if last_date != today:
+            cursor.execute("UPDATE users SET requests_count = 0, last_reset = ? WHERE user_id = ?", (today, user_id))
+            conn.commit()
+            return 0
+        return count
+
+
+def increment_request(user_id):
+    cursor.execute("UPDATE users SET requests_count = requests_count + 1 WHERE user_id = ?", (user_id,))
+    conn.commit()
+
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
@@ -62,18 +98,32 @@ async def cmd_start(message: types.Message):
 async def generate_description(message: types.Message):
     text = message.text.strip()
 
+    # 1. Проверка длины
     if len(text) < 15:
         await message.answer("⚠️ Опиши товар подробнее. Минимум 15 символов.")
         return
 
+    # 2. ПРОВЕРКА ЛИМИТА (3 запроса в день бесплатно)
+    user_id = message.from_user.id
+    if get_user_stats(user_id) >= 3:
+        await message.answer(
+            "🔒 Лимит бесплатных запросов на сегодня исчерпан.\n"
+            "💳 Безлимитный доступ: 99₽/неделя. Для оплаты напиши: @BiziRoman"
+        )
+        return
+
+    # 3. Фиксируем запрос в базе
+    increment_request(user_id)
+
+    # 4. Генерация
     await message.answer("⏳ Генерирую описание...")
 
     try:
         response = client.chat.completions.create(
-            model="openrouter/auto",  # <-- автовыбор рабочей бесплатной модели
+            model="openrouter/auto",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": f"Товар: {message.text}"}
+                {"role": "user", "content": f"Товар: {text}"}
             ],
             temperature=0.7,
             max_tokens=400
