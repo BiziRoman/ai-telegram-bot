@@ -107,7 +107,7 @@ async def generate_description(message: types.Message):
     if get_user_stats(user_id) >= 3:
         await message.answer(
             "🔒 Лимит бесплатных запросов на сегодня исчерпан.\n"
-            "💳 Безлимит: 99₽/неделя. Пиши: @ТвойНикнейм"
+            "💳 Безлимит: 99₽/неделя. Пиши: @BiziRoman"
         )
         return
 
