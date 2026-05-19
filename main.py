@@ -12,18 +12,26 @@ from datetime import date
 # Мини-веб-сервер для предотвращения "засыпания"
 app = Flask(__name__)
 
+
 @app.route('/')
 def home():
     return "🤖 Бот работает!"
 
+
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
 
+
+# Запускаем веб-сервер в отдельном потоке
 threading.Thread(target=run_flask, daemon=True).start()
 
+# Загрузка переменных из .env
 load_dotenv()
+
+# Настройка логирования
 logging.basicConfig(level=logging.INFO)
 
+# Инициализация
 bot = Bot(token=os.getenv("TG_BOT_TOKEN"))
 dp = Dispatcher()
 client = OpenAI(
@@ -31,6 +39,7 @@ client = OpenAI(
     api_key=os.getenv("OPENAI_API_KEY")
 )
 
+# Системный промпт
 SYSTEM_PROMPT = """Ты — эксперт по копирайтингу для маркетплейсов.
 Создавай короткие, продающие описания товаров на русском языке.
 Структура: 1) Заголовок, 2) 3–5 ключевых преимуществ, 3) Призыв к действию.
@@ -39,8 +48,10 @@ SYSTEM_PROMPT = """Ты — эксперт по копирайтингу для 
 ❗ ВАЖНО:
 - Не выдумывай характеристики, которых нет в запросе
 - Избегай канцеляризмов — пиши живым языком
+- Для преимуществ используй формулу: "Выгода для покупателя + почему это важно"
 """
 
+# Инициализация БД
 conn = sqlite3.connect("users.db", check_same_thread=False)
 cursor = conn.cursor()
 cursor.execute("""CREATE TABLE IF NOT EXISTS users (
@@ -49,6 +60,7 @@ cursor.execute("""CREATE TABLE IF NOT EXISTS users (
     last_reset DATE
 )""")
 conn.commit()
+
 
 def get_user_stats(user_id):
     today = date.today().isoformat()
@@ -66,9 +78,11 @@ def get_user_stats(user_id):
             return 0
         return count
 
+
 def increment_request(user_id):
     cursor.execute("UPDATE users SET requests_count = requests_count + 1 WHERE user_id = ?", (user_id,))
     conn.commit()
+
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
@@ -78,22 +92,29 @@ async def cmd_start(message: types.Message):
         "Пример: 'Кроссовки мужские, размер 42, сетка, EVA, чёрный'"
     )
 
+
 @dp.message(F.text)
 async def generate_description(message: types.Message):
     text = message.text.strip()
+
+    # 1. Проверка длины
     if len(text) < 15:
         await message.answer("⚠️ Опиши товар подробнее. Минимум 15 символов.")
         return
 
+    # 2. ПРОВЕРКА ЛИМИТА (3 запроса в день)
     user_id = message.from_user.id
     if get_user_stats(user_id) >= 3:
         await message.answer(
             "🔒 Лимит бесплатных запросов на сегодня исчерпан.\n"
-            "💳 Безлимит: 99₽/неделя. Для оплаты напиши: @ТвойНикнейм"
+            "💳 Безлимит: 99₽/неделя. Пиши: @ТвойНикнейм"
         )
         return
 
+    # 3. Фиксируем запрос
     increment_request(user_id)
+
+    # 4. Генерация
     await message.answer("⏳ Генерирую описание...")
 
     try:
@@ -112,9 +133,11 @@ async def generate_description(message: types.Message):
         logging.error(f"Ошибка API: {e}")
         await message.answer("❌ Ошибка генерации. Попробуй позже или напиши /help")
 
+
 @dp.message(Command("help"))
 async def cmd_help(message: types.Message):
-    await message.answer("📖 Отправь товар → получи описание за 10 сек.\n💡 Чем точнее данные, тем лучше результат.")
+    await message.answer("📖 Отправь товар → получи описание за 10 сек.")
+
 
 if __name__ == "__main__":
     logging.info("Запуск бота...")
