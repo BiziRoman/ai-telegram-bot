@@ -10,7 +10,7 @@ import sqlite3
 from datetime import date
 
 # Мини-веб-сервер для предотвращения "засыпания"
-app = Flask(__name__)  # <-- Исправлено: добавлены подчеркивания
+app = Flask(__name__)
 
 
 @app.route('/')
@@ -22,7 +22,6 @@ def run_flask():
     app.run(host='0.0.0.0', port=8080)
 
 
-# Запускаем веб-сервер в отдельном потоке
 threading.Thread(target=run_flask, daemon=True).start()
 
 load_dotenv()
@@ -42,10 +41,14 @@ SYSTEM_PROMPT = """Ты — эксперт по копирайтингу для 
 
 ❗ ВАЖНО:
 - Не выдумывай характеристики, которых нет в запросе
-- Избегай канцеляризмов — пиши живым языком
+- Избегай канцеляризмов ("обеспечивает", "способствует") — пиши живым языком
+- Для преимуществ используй формулу: "Выгода для покупателя + почему это важно"
 """
 
-# --- БАЗА ДАННЫХ ---
+# 🛡️ СПИСОК АДМИНОВ (ВСТАВЬ СЮДА СВОЙ TELEGRAM ID)
+ADMIN_IDS = {123456789}
+
+# Инициализация БД
 conn = sqlite3.connect("users.db", check_same_thread=False)
 cursor = conn.cursor()
 cursor.execute("""CREATE TABLE IF NOT EXISTS users (
@@ -78,15 +81,12 @@ def increment_request(user_id):
     conn.commit()
 
 
-# --- ОБРАБОТЧИКИ ---
-
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     await message.answer(
-        " *Привет! Я AI-помощник для маркетплейсов*\n\n"
-        "✨ Создаю продающие описания за 10 секунд.\n"
-        "📝 Просто отправь название и характеристики товара.\n\n"
-        "🎁 *3 описания бесплатно* каждый день!"
+        "👋 Привет! Я создаю продающие описания для товаров.\n\n"
+        "Просто отправь название и ключевые характеристики товара.\n"
+        "Пример: 'Кроссовки мужские, размер 42, дышащая сетка, подошва EVA, цвет чёрный'"
     )
 
 
@@ -99,10 +99,12 @@ async def generate_description(message: types.Message):
         return
 
     user_id = message.from_user.id
-    if get_user_stats(user_id) >= 3:
+
+    # 🛡️ ПРОВЕРКА ЛИМИТА (Админы из ADMIN_IDS пропускаются без проверки!)
+    if user_id not in ADMIN_IDS and get_user_stats(user_id) >= 3:
         await message.answer(
-            "🔒 Лимит на сегодня исчерпан.\n"
-            "💳 Безлимит: 99₽/неделя. Для оплаты напиши: @BiziRoman"
+            "🔒 Лимит бесплатных запросов на сегодня исчерпан.\n"
+            "💳 Безлимитный доступ: 99₽/неделя. Для оплаты напиши: @BiziRoman"
         )
         return
 
@@ -110,25 +112,23 @@ async def generate_description(message: types.Message):
     await message.answer("⏳ Генерирую описание...")
 
     try:
-        # ИСПРАВЛЕННЫЙ ЗАПРОС (без лишних пробелов!)
+        # 🤖 НОВАЯ МОДЕЛЬ GLM 4.5 Air (free)
         response = client.chat.completions.create(
-            model="deepseek/deepseek-v4-flash:free",  # ← НОВАЯ МОДЕЛЬ
+            model="z-ai/glm-4.5-air:free",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": f"Товар: {text}"}
             ],
-            temperature=0.6,  # Для GLM лучше 0.6
-            max_tokens=500  # Увеличь лимит для лучшего качества
+            temperature=0.6,
+            max_tokens=600
         )
-
-        # Защита от None
         result = response.choices[0].message.content
+
         if not result:
             await message.answer("❌ Нейросеть вернула пустой ответ. Попробуй еще раз.")
             return
 
-        await message.answer(f"✅ *Готово!*\n\n{result}", parse_mode="Markdown")
-
+        await message.answer(f"✅ Готово:\n\n{result}")
     except Exception as e:
         logging.error(f"Ошибка API: {e}")
         await message.answer("❌ Ошибка генерации. Попробуй позже или напиши /help")
@@ -136,10 +136,15 @@ async def generate_description(message: types.Message):
 
 @dp.message(Command("help"))
 async def cmd_help(message: types.Message):
-    await message.answer("📖 Отправь товар → получи описание.\n💡 Чем точнее данные, тем лучше результат.")
+    await message.answer(
+        "📖 Как пользоваться:\n"
+        "1. Отправь название + характеристики товара\n"
+        "2. Получи готовое описание за 5–10 секунд\n"
+        "3. При необходимости уточни детали в следующем сообщении\n\n"
+        "💡 Совет: Чем точнее входные данные, тем лучше результат."
+    )
 
 
-# ИСПРАВЛЕННЫЙ ЗАПУСК
 if __name__ == "__main__":
     logging.info("Запуск бота...")
     dp.run_polling(bot, allowed_updates=dp.resolve_used_update_types())
