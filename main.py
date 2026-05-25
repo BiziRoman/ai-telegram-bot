@@ -112,7 +112,7 @@ async def generate_description(message: types.Message):
     try:
         # ИСПРАВЛЕННЫЙ ЗАПРОС (без лишних пробелов!)
         response = client.chat.completions.create(
-            model="z-ai/glm-4.5-air:free",  # ← НОВАЯ МОДЕЛЬ
+            model="deepseek/deepseek-v4-flash:free",  # ← НОВАЯ МОДЕЛЬ
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": f"Товар: {text}"}
