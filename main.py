@@ -4,7 +4,6 @@ import re
 import secrets
 import sqlite3
 import threading
-import asyncio
 from datetime import date, timedelta
 
 from aiogram import Bot, Dispatcher, types, F
@@ -175,9 +174,9 @@ user_states = {}  # user_id: "waiting_promo"
 def main_menu_kb(user_id):
     kb = [[
         InlineKeyboardButton(text=" Купить подписку", callback_data="menu_buy"),
-        InlineKeyboardButton(text=" Ввести промокод", callback_data="menu_promo")
+        InlineKeyboardButton(text="🔑 Ввести промокод", callback_data="menu_promo")
     ], [
-        InlineKeyboardButton(text="📊 Мой статус", callback_data="menu_status"),
+        InlineKeyboardButton(text=" Мой статус", callback_data="menu_status"),
         InlineKeyboardButton(text="❓ Помощь", callback_data="menu_help")
     ]]
     if user_id in ADMIN_IDS:
@@ -193,14 +192,31 @@ back_kb = InlineKeyboardMarkup(
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     user_states.pop(message.from_user.id, None)
-    await message.answer(
-        "✍️ *Генератор карточек товара PRO*\n\n"
-        "_Нейросеть, которая пишет продающие описания за 1 минуту_\n\n"
-        "Просто отправьте название товара, и я создам готовую карточку для WB/Ozon.\n"
-        "Внизу — кнопки для управления подпиской и статусом.",
-        reply_markup=main_menu_kb(message.from_user.id),
-        parse_mode="Markdown"
-    )
+    welcome_text = """✍️ *Генератор текстовых карточек товара PRO*
+
+_Нейросеть, которая пишет продающие описания за 1 минуту_
+
+Привет, селлер! Устали ломать голову над заголовками и характеристиками для Ozon / Wildberries? Просто опишите товар словами — я сделаю всё остальное.
+
+🤖 *Я превращаю ваш текст в готовую карточку для маркетплейса.*
+
+*Что я сгенерирую на основе вашего текста:*
+✅ Кликбейтный заголовок (до 70 символов с ключами)
+✅ SEO-описание (для поиска внутри WB/Ozon)
+✅ Продающее УТП (блок «Почему выберут вас»)
+✅ Список характеристик (техничка + выгода)
+✅ Готовый текст для копирования в карточку
+
+🚀 *Как это работает:*
+`Ваше сырое описание` ➡️ `AI` ➡️ `Готовая карточка`
+
+*Просто напишите мне название или пару слов о товаре*
+_(например: «стеклянный чайник 1.5 л с подсветкой»), и я начну!_ 🍵
+
+—
+_Экономит 2 часа в день у селлеров на WB, Ozon, Yandex.Market_"""
+
+    await message.answer(welcome_text, parse_mode="Markdown", reply_markup=main_menu_kb(message.from_user.id))
 
 
 @dp.callback_query(F.data == "menu_main")
@@ -231,7 +247,7 @@ async def plan_selected(callback: types.CallbackQuery):
         "📲 *Оплата:*\n"
         "• Карта: `2200 1234 5678 9012`\n"
         "• СБП/ЮMoney: `+7 (999) 123-45-67`\n\n"
-        "После оплаты напишите @ТвойНикнейм → получите промокод → введите его через кнопку «🔑 Ввести промокод»",
+        "После оплаты напишите @BiziRoman → получите промокод → введите его через кнопку «🔑 Ввести промокод»",
         reply_markup=kb, parse_mode="Markdown"
     )
     await callback.answer()
@@ -309,7 +325,7 @@ async def handle_text(message: types.Message):
     if user_states.get(uid) == "waiting_promo":
         user_states.pop(uid)
         success, msg = use_promo_code(uid, message.text.strip())
-        kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="↩️ В меню", callback_data="menu_main")]])
+        kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="️ В меню", callback_data="menu_main")]])
         await message.answer(f"{'✅' if success else '❌'} {msg}", reply_markup=kb, parse_mode="Markdown")
         return
 
@@ -321,7 +337,7 @@ async def handle_text(message: types.Message):
 
     if uid not in ADMIN_IDS and not get_subscription(uid) and get_user_stats(uid) >= 3:
         await message.answer(
-            " *Лимит исчерпан*\n\nОформите подписку для безлимита:",
+            "🔒 *Лимит исчерпан*\n\nОформите подписку для безлимита:",
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[[InlineKeyboardButton(text="🛒 Купить подписку", callback_data="menu_buy")]]),
             parse_mode="Markdown"
@@ -342,7 +358,7 @@ async def handle_text(message: types.Message):
             await message.answer(f"{prefix}{part}", reply_markup=main_menu_kb(uid) if i == len(parts) - 1 else None)
     except Exception as e:
         logging.error(f"Ошибка генерации: {e}")
-        await message.answer(" Ошибка генерации. Попробуйте позже.", reply_markup=main_menu_kb(uid))
+        await message.answer("❌ Ошибка генерации. Попробуйте позже.", reply_markup=main_menu_kb(uid))
 
 
 if __name__ == "__main__":
