@@ -112,13 +112,13 @@ async def generate_description(message: types.Message):
     try:
         # ИСПРАВЛЕННЫЙ ЗАПРОС (без лишних пробелов!)
         response = client.chat.completions.create(
-            model="openrouter/auto",
+            model="z-ai/glm-4.5-air:free",  # ← НОВАЯ МОДЕЛЬ
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": f"Товар: {text}"}
             ],
-            temperature=0.7,
-            max_tokens=500
+            temperature=0.6,  # Для GLM лучше 0.6
+            max_tokens=500  # Увеличь лимит для лучшего качества
         )
 
         # Защита от None
