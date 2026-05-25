@@ -57,7 +57,9 @@ SYSTEM_PROMPT = """Ты — профессиональный копирайте�
 — Выдавай ТОЛЬКО готовый текст описания без пояснений и подписей
 """
 
-ADMIN_IDS = {2104462484}  # ← ВСТАВЬ СВОЙ TELEGRAM ID
+# Читаем ADMIN_IDS из переменных окружения
+admin_ids_str = os.getenv("ADMIN_IDS", "")
+ADMIN_IDS = {int(id.strip()) for id in admin_ids_str.split(",") if id.strip()}
 
 conn = sqlite3.connect("users.db", check_same_thread=False)
 cursor = conn.cursor()
